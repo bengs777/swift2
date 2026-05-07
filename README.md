@@ -76,3 +76,4 @@ the production database contains the Prisma tables, especially `User`,
 # SWIFT2
 # swift-2
 # swift2
+# swift2
