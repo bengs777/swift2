@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { ModelConfigService } from "@/lib/services/model-config.service"
-import { SWIFT_AI_MODEL_KEY } from "@/lib/ai/models"
+import { assertOpenRouterReady, OPENROUTER_BASE_URL, OPENROUTER_MODEL_ID } from "@/lib/ai/openrouter-config"
 import { env } from "@/lib/env"
 
 type ProviderState = "connected" | "slow" | "timeout"
@@ -37,15 +37,10 @@ export async function GET(request: NextRequest) {
 
   const shouldRefresh = request.nextUrl.searchParams.get("refresh") === "true"
   const now = Date.now()
-  const resolvedModelName = resolveProviderModelName(model.provider, model.modelName)
-  const cacheKey = `${model.provider}:${resolvedModelName}`
+  const cacheKey = `openrouter:${OPENROUTER_MODEL_ID}`
   const cached = statusCache.get(cacheKey)
 
-  if (
-    !shouldRefresh &&
-    cached &&
-    now - cached.checkedAt < env.providerStatusCacheTtlMs
-  ) {
+  if (!shouldRefresh && cached && now - cached.checkedAt < env.providerStatusCacheTtlMs) {
     return NextResponse.json({
       modelKey,
       status: cached.status,
@@ -58,7 +53,7 @@ export async function GET(request: NextRequest) {
     })
   }
 
-  const status = await checkProviderStatus(model.provider, resolvedModelName)
+  const status = await checkOpenRouterStatus()
   statusCache.set(cacheKey, {
     ...status,
     checkedAt: now,
@@ -76,107 +71,36 @@ export async function GET(request: NextRequest) {
   })
 }
 
-async function checkProviderStatus(provider: string, modelName: string) {
+async function checkOpenRouterStatus() {
   const startedAt = Date.now()
 
   try {
-    if (provider === "agentrouter") {
-      if (!env.agentRouterApiKey) {
-        return {
-          status: "timeout" as ProviderState,
-          issue: "config" as ProviderIssue,
-          responseTimeMs: Date.now() - startedAt,
-          reason: "AgentRouter API key is missing",
-          action: "Tambahkan AGENT_ROUTER_TOKEN (atau AGENTROUTER_API_KEY) di file .env lalu restart dev server.",
-        }
-      }
-
-      return checkSingleSource({
-        url: `${env.agentRouterApiUrl}/chat/completions`,
-        modelName,
-        apiKey: env.agentRouterApiKey,
-      })
-    }
-
-    if (provider === "openai") {
-      if (!env.openAiApiKey) {
-        return {
-          status: "timeout" as ProviderState,
-          issue: "config" as ProviderIssue,
-          responseTimeMs: Date.now() - startedAt,
-          reason: "OpenAI-compatible API key is missing",
-          action: "Tambahkan OPENAI_API_KEY di file .env lalu restart dev server.",
-        }
-      }
-
-      return checkSingleSource({
-        url: `${env.openAiApiUrl}/chat/completions`,
-        modelName,
-        apiKey: env.openAiApiKey,
-        includeOpenRouterHeaders: env.openAiApiUrl.includes("openrouter.ai"),
-      })
-    }
-
-    if (provider === "orchestrator") {
-      if (!env.openAiApiKey || !env.openAiApiUrl.includes("openrouter")) {
-        return {
-          status: "timeout" as ProviderState,
-          issue: "config" as ProviderIssue,
-          responseTimeMs: Date.now() - startedAt,
-          reason: "OpenRouter API key is missing or not using OpenRouter",
-          action: "Tambahkan OPENAI_API_KEY dan pastikan OPENAI_API_URL mengarah ke OpenRouter.",
-        }
-      }
-
-      return checkSingleSource({
-        url: `${env.openAiApiUrl}/chat/completions`,
-        modelName,
-        apiKey: env.openAiApiKey,
-        includeOpenRouterHeaders: env.openAiApiUrl.includes("openrouter.ai"),
-      })
-    }
-
-    return {
-      status: "timeout" as ProviderState,
-      issue: "unknown" as ProviderIssue,
-      responseTimeMs: Date.now() - startedAt,
-      reason: `Unsupported provider: ${provider}`,
-      action: "Periksa konfigurasi provider dan model aktif.",
-    }
+    const config = assertOpenRouterReady()
+    return checkSingleSource({
+      url: `${OPENROUTER_BASE_URL}/chat/completions`,
+      modelName: OPENROUTER_MODEL_ID,
+      apiKey: config.apiKey,
+    })
   } catch (error) {
     const elapsedMs = Date.now() - startedAt
-    const isAbort = error instanceof Error && error.name === "AbortError"
-
     return {
       status: "timeout" as ProviderState,
-      issue: isAbort ? ("latency" as ProviderIssue) : ("unknown" as ProviderIssue),
+      issue: "config" as ProviderIssue,
       responseTimeMs: elapsedMs,
-      reason: isAbort ? "Provider status check timed out" : "Provider status check failed",
-      action: isAbort
-        ? "Provider sedang lambat. Coba lagi sebentar lagi atau ganti model."
-        : "Periksa koneksi server dan konfigurasi provider.",
+      reason: error instanceof Error ? error.message : "OpenRouter configuration failed",
+      action: "Tambahkan OPENROUTER_API_KEY di .env atau Vercel env, lalu restart dev server/redeploy.",
     }
   }
-}
-
-function resolveProviderModelName(provider: string, modelName: string) {
-  if (provider === "openai" && modelName === SWIFT_AI_MODEL_KEY) {
-    return env.openAiDefaultModel
-  }
-
-  return modelName
 }
 
 async function checkSingleSource({
   url,
   modelName,
   apiKey,
-  includeOpenRouterHeaders = false,
 }: {
   url: string
   modelName: string
   apiKey: string
-  includeOpenRouterHeaders?: boolean
 }) {
   const startedAt = Date.now()
   const controller = new AbortController()
@@ -189,24 +113,14 @@ async function checkSingleSource({
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
-        ...(includeOpenRouterHeaders
-          ? {
-              "HTTP-Referer": env.nextAuthUrl || env.appUrl || "http://localhost:3000",
-              "X-Title": "Swift AI Web Builder",
-            }
-          : {}),
+        "HTTP-Referer": env.nextAuthUrl || env.appUrl || "http://localhost:3000",
+        "X-Title": "Swift AI Web Builder",
       },
       body: JSON.stringify({
         model: modelName,
         messages: [
-          {
-            role: "system",
-            content: "Respond with one word.",
-          },
-          {
-            role: "user",
-            content: "ping",
-          },
+          { role: "system", content: "Respond with one word." },
+          { role: "user", content: "ping" },
         ],
         max_tokens: 1,
       }),
@@ -218,78 +132,39 @@ async function checkSingleSource({
         status: elapsedMs > 2_500 ? ("slow" as ProviderState) : ("connected" as ProviderState),
         issue: elapsedMs > 2_500 ? ("latency" as ProviderIssue) : ("healthy" as ProviderIssue),
         responseTimeMs: elapsedMs,
-        reason: "Provider responded normally",
-        action:
-          elapsedMs > 2_500
-            ? "Provider hidup tapi agak lambat. Generate tetap bisa dicoba."
-            : "Provider siap dipakai.",
+        reason: "OpenRouter responded normally",
+        action: elapsedMs > 2_500 ? "OpenRouter hidup tapi agak lambat. Generate tetap bisa dicoba." : "OpenRouter siap dipakai.",
       }
     }
 
+    const rawText = await response.text()
     if (response.status === 402 || response.status === 429) {
-      const rawText = await response.text()
-      const normalizedText = rawText.toLowerCase()
-      const isCreditLimit =
-        response.status === 402 ||
-        normalizedText.includes("credit") ||
-        normalizedText.includes("can only afford") ||
-        normalizedText.includes("max_tokens")
-      const isQuota =
-        isCreditLimit ||
-        normalizedText.includes("quota") ||
-        normalizedText.includes("rate-limit")
       return {
         status: "slow" as ProviderState,
-        issue: isQuota ? ("quota" as ProviderIssue) : ("latency" as ProviderIssue),
+        issue: "quota" as ProviderIssue,
         responseTimeMs: elapsedMs,
-        reason: isCreditLimit
-          ? "OpenRouter credit is too low for the current token limit"
-          : isQuota
-            ? "Provider quota or upstream rate limit reached"
-            : "Provider rate limited request",
-        action: isCreditLimit
-          ? "Turunkan AI_MAX_OUTPUT_TOKENS di .env lalu restart dev server, atau isi ulang credit OpenRouter."
-          : isQuota
-            ? "Coba beberapa menit lagi, ganti model, atau gunakan key provider sendiri (BYOK)."
-          : "Tunggu sebentar atau ganti model untuk mengurangi antrean.",
+        reason: `OpenRouter returned ${response.status}: ${rawText}`,
+        action: "Periksa credit/rate limit OpenRouter atau turunkan OPENROUTER_MAX_TOKENS.",
       }
     }
 
     if (response.status === 401 || response.status === 403) {
-      const rawText = await response.text()
-      const normalizedText = rawText.toLowerCase()
-      const isQuota = normalizedText.includes("quota") || rawText.includes("额度不足")
-      const reason = isQuota
-        ? "Provider quota exhausted"
-        : "Provider rejected authentication or model access"
-
       return {
         status: "timeout" as ProviderState,
-        issue: isQuota ? ("quota" as ProviderIssue) : ("auth" as ProviderIssue),
+        issue: "auth" as ProviderIssue,
         responseTimeMs: elapsedMs,
-        reason,
-        action: isQuota
-          ? "Isi ulang kuota provider lalu coba generate lagi."
-          : "Periksa API key, izin model, atau whitelist akun provider.",
+        reason: `OpenRouter rejected authentication or model access: ${rawText}`,
+        action: "Periksa OPENROUTER_API_KEY dan akses model deepseek/deepseek-v4-flash.",
       }
     }
 
     if (response.status === 404) {
-      const rawText = await response.text()
-      const normalizedText = rawText.toLowerCase()
-      const isModelUnavailable =
-        normalizedText.includes("no endpoints found") ||
-        normalizedText.includes("model not found") ||
-        normalizedText.includes("unknown model")
-
       return {
         status: "timeout" as ProviderState,
-        issue: isModelUnavailable ? ("config" as ProviderIssue) : ("unknown" as ProviderIssue),
+        issue: "config" as ProviderIssue,
         responseTimeMs: elapsedMs,
-        reason: isModelUnavailable ? "Selected model is not available on provider" : "Provider returned 404",
-        action: isModelUnavailable
-          ? "Ganti ke model lain yang masih aktif."
-          : "Periksa endpoint provider atau coba model lain.",
+        reason: `OpenRouter model not available: ${rawText}`,
+        action: "Pastikan model deepseek/deepseek-v4-flash tersedia di akun OpenRouter.",
       }
     }
 
@@ -297,8 +172,8 @@ async function checkSingleSource({
       status: "timeout" as ProviderState,
       issue: "unknown" as ProviderIssue,
       responseTimeMs: elapsedMs,
-      reason: `Provider returned ${response.status}`,
-      action: "Periksa endpoint provider atau coba model lain.",
+      reason: `OpenRouter returned ${response.status}: ${rawText}`,
+      action: "Periksa endpoint OpenRouter dan log server.",
     }
   } catch (error) {
     const elapsedMs = Date.now() - startedAt
@@ -307,10 +182,8 @@ async function checkSingleSource({
       status: "timeout" as ProviderState,
       issue: isAbort ? ("latency" as ProviderIssue) : ("unknown" as ProviderIssue),
       responseTimeMs: elapsedMs,
-      reason: isAbort ? "Provider status check timed out" : "Provider status check failed",
-      action: isAbort
-        ? "Provider sedang lambat. Tunggu sebentar atau ganti model."
-        : "Periksa koneksi server ke provider.",
+      reason: isAbort ? "OpenRouter status check timed out" : "OpenRouter status check failed",
+      action: isAbort ? "OpenRouter sedang lambat. Tunggu sebentar." : "Periksa koneksi server ke OpenRouter.",
     }
   } finally {
     clearTimeout(timeout)

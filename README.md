@@ -24,12 +24,8 @@ Use these values in the Vercel project settings:
 | `TURSO_AUTH_TOKEN` | Turso auth token |
 | `NEXT_PUBLIC_APP_URL` | `https://swift.example.com` |
 | `DEV_OWNER_EMAIL` | `ibnualmugni1933@gmail.com` |
-| `AI_PRIMARY_PROVIDER` | `openai` |
-| `OPENAI_API_KEY` | OpenRouter API key |
-| `OPENAI_API_URL` | `https://openrouter.ai/api/v1` |
-| `OPENAI_DEFAULT_MODEL` | `qwen/qwen3-coder:free` |
-| `OPENAI_MODELS` | `qwen/qwen3-coder:free,tencent/hy3-preview:free,qwen/qwen3.6-plus-preview:free` |
-| `OPENAI_FALLBACK_MODEL` | `qwen/qwen3-coder:free` |
+| `OPENROUTER_API_KEY` | OpenRouter API key |
+| `OPENROUTER_MAX_TOKENS` | `3000` |
 ## Google OAuth Redirect URI
 
 Add this exact redirect URI in Google Cloud Console:
@@ -75,5 +71,5 @@ the production database contains the Prisma tables, especially `User`,
 
 - Keep `.env` out of Git. Use `.env.example` as the template.
 - `GOOGLE_AUTH_SETUP.md` contains the step-by-step production auth checklist.
-- OpenRouter free models are pinned in the runtime model list so the app stays on the free-only path by default.
+- AI generation is locked to OpenRouter at `https://openrouter.ai/api/v1` using model `deepseek/deepseek-v4-flash`.
 # swift2

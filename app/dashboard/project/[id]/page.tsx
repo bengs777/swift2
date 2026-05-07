@@ -374,7 +374,7 @@ export default function EditorPage() {
         status: "error",
         issue: "auth",
         reason: "Provider rejected authentication or model access",
-        action: "Periksa API key provider aktif (OPENAI_API_KEY atau AGENT_ROUTER_TOKEN), izin model, dan endpoint API.",
+        action: "Periksa OPENROUTER_API_KEY, akses model deepseek/deepseek-v4-flash, dan endpoint OpenRouter.",
         checkedAt: new Date().toISOString(),
       }
     }
@@ -396,7 +396,7 @@ export default function EditorPage() {
           ? "Credit OpenRouter tidak cukup untuk batas output request saat ini"
           : "Provider quota atau upstream rate limit sedang penuh",
         action: normalized.includes("fewer max_tokens") || normalized.includes("can only afford")
-          ? "Turunkan AI_MAX_OUTPUT_TOKENS di .env lalu restart dev server, atau isi ulang credit OpenRouter."
+          ? "Turunkan OPENROUTER_MAX_TOKENS di .env lalu restart dev server, atau isi ulang credit OpenRouter."
           : "Coba lagi beberapa menit, ganti model, atau gunakan key provider sendiri (BYOK).",
         checkedAt: new Date().toISOString(),
       }
@@ -414,7 +414,7 @@ export default function EditorPage() {
           ? "Batas token output terlalu tinggi untuk request ini"
           : "Provider sedang rate-limited",
         action: normalized.includes("max_tokens")
-          ? "Coba lagi dengan prompt lebih singkat, atau turunkan AI_MAX_OUTPUT_TOKENS di .env."
+          ? "Coba lagi dengan prompt lebih singkat, atau turunkan OPENROUTER_MAX_TOKENS di .env."
           : "Tunggu beberapa menit lalu coba lagi.",
         checkedAt: new Date().toISOString(),
       }
@@ -429,7 +429,7 @@ export default function EditorPage() {
         status: "error",
         issue: "config",
         reason: "Model yang dipilih sedang tidak tersedia di provider",
-        action: "Pilih model lain yang masih aktif agar request tetap stabil.",
+        action: "Pastikan model deepseek/deepseek-v4-flash tersedia di OpenRouter.",
         checkedAt: new Date().toISOString(),
       }
     }
@@ -439,7 +439,7 @@ export default function EditorPage() {
         status: "slow",
         issue: "latency",
         reason: "Provider request timed out",
-        action: "Coba lagi nanti atau ganti model yang lebih ringan.",
+        action: "Coba lagi nanti. Tidak ada fallback otomatis ke model lain.",
         checkedAt: new Date().toISOString(),
       }
     }
@@ -449,7 +449,7 @@ export default function EditorPage() {
         status: "error",
         issue: "config",
         reason: "Provider configuration is incomplete",
-        action: "Periksa variabel env AgentRouter dan restart dev server.",
+        action: "Periksa OPENROUTER_API_KEY dan restart dev server.",
         checkedAt: new Date().toISOString(),
       }
     }

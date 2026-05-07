@@ -169,7 +169,7 @@ export async function GET() {
 export async function GET() {
   return NextResponse.json({
     models: [
-      { key: "default", label: "Default", provider: "openai", price: 1000 },
+      { key: "deepseek/deepseek-v4-flash", label: "Swift AI", provider: "openrouter", price: 2000 },
     ],
   })
 }
@@ -342,7 +342,7 @@ export function useToast() {
   nodeEnv: process.env.NODE_ENV || "development",
   tursoDatabaseUrl: process.env.TURSO_DATABASE_URL || "",
   tursoAuthToken: process.env.TURSO_AUTH_TOKEN || "",
-  openAiApiKey: process.env.OPENAI_API_KEY || "",
+  openRouterApiKey: process.env.OPENROUTER_API_KEY || "",
 }
 `,
     },
@@ -370,9 +370,9 @@ export const appStore: AppState = {
       path: "lib/ai/config.ts",
       language: "ts",
       content: `export const AI_CONFIG = {
-  provider: "openai",
-  model: process.env.OPENAI_DEFAULT_MODEL || "qwen/qwen3-coder:free",
-  baseUrl: process.env.OPENAI_API_URL || "https://openrouter.ai/api/v1",
+  provider: "openrouter",
+  model: "deepseek/deepseek-v4-flash",
+  baseUrl: "https://openrouter.ai/api/v1",
   timeoutMs: Number(process.env.AI_TIMEOUT_MS || 60000),
 }
 `,
@@ -443,10 +443,8 @@ model Project {
       content: `TURSO_DATABASE_URL="libsql://your-turso-instance.turso.io"
     TURSO_AUTH_TOKEN="replace-me"
 NEXTAUTH_SECRET="replace-me"
-OPENAI_API_KEY="replace-me"
-OPENAI_API_URL="https://openrouter.ai/api/v1"
-OPENAI_DEFAULT_MODEL="qwen/qwen3-coder:free"
-AI_PRIMARY_PROVIDER="openai"
+OPENROUTER_API_KEY="replace-me"
+OPENROUTER_MAX_TOKENS="3000"
 `,
     },
     {

@@ -1,11 +1,12 @@
-import { env } from '@/lib/env'
+import { OPENROUTER_BASE_URL, OPENROUTER_MODEL_ID, OPENROUTER_PROVIDER } from "@/lib/ai/openrouter-config"
+import { env } from "@/lib/env"
 
-// AI Configuration for OpenRouter/OpenAI-compatible integration
+// Central AI configuration. All provider calls must use this OpenRouter setup.
 
 export const AI_CONFIG = {
-  provider: "openai",
-  model: env.openAiDefaultModel || "qwen/qwen3-coder:free",
-  baseUrl: env.openAiApiUrl,
+  provider: OPENROUTER_PROVIDER,
+  model: OPENROUTER_MODEL_ID,
+  baseUrl: OPENROUTER_BASE_URL,
   temperature: 0.7,
   maxTokens: env.aiMaxOutputTokens,
   topP: 0.95,

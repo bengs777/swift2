@@ -14,7 +14,7 @@ import { appendAIContextToPrompt, buildAIContextSnapshot } from "@/lib/ai/contex
 import { autoRepairFullStackFiles, validateFullStackFiles } from "@/lib/ai/fullstack-validator"
 import { ProviderRouter } from "@/lib/ai/provider-router"
 import type { ProviderName } from "@/lib/ai/provider-router"
-import { SWIFT_AI_DISPLAY_NAME, SWIFT_AI_MODEL_KEY, DEEPSEEK_MODEL_KEY, isVisionCapableModel } from "@/lib/ai/models"
+import { SWIFT_AI_DISPLAY_NAME, SWIFT_AI_MODEL_KEY, isVisionCapableModel } from "@/lib/ai/models"
 import { analyzePromptIntent, buildClarifyingPrompt } from "@/lib/ai/prompt-intent"
 import type { PromptLanguage } from "@/lib/ai/prompt-templates"
 import type { GeneratedFile, ProjectMemoryData, PromptAttachment } from "@/lib/types"
@@ -75,7 +75,7 @@ const PROJECT_STRUCTURE_CONTEXT_CHAR_LIMIT = 14000
 const PREVIEW_EXECUTABLE_FILE_PATTERN = /\.(tsx|ts|jsx|js|mjs|cjs)$/i
 const PREVIEW_JSON_FILE_PATTERN = /\.json$/i
 const PREVIEW_ASSET_FILE_PATTERN = /\.(css|scss|sass|less|md|env|prisma|html|txt|csv|yml|yaml|svg|png|jpe?g|gif|webp|avif|ico|bmp|mp4|webm|mp3|wav|ogg|woff2?|ttf|otf|lock|toml|ini|xml|pdf|webmanifest|manifest|d\.ts|d\.mts|d\.cts)$/i
-const SUPPORTED_PROVIDERS: ProviderName[] = ["agentrouter", "openai", "orchestrator", "deepseek"]
+const SUPPORTED_PROVIDERS: ProviderName[] = ["openrouter"]
 const COLLABORATION_MODES = ["build", "edit", "fix", "review", "ask"] as const
 
 type CollaborationMode = (typeof COLLABORATION_MODES)[number]
@@ -106,19 +106,7 @@ const GenerateSchema = z.object({
   ).max(MAX_ATTACHMENTS).optional().default([]),
 })
 
-function getProviderDisplayName(provider: string) {
-  if (provider === "agentrouter") {
-    return "AgentRouter"
-  }
-
-  if (provider === "openai") {
-    return SWIFT_AI_DISPLAY_NAME
-  }
-
-  if (provider === "orchestrator") {
-    return SWIFT_AI_DISPLAY_NAME
-  }
-
+function getProviderDisplayName(_provider: string) {
   return SWIFT_AI_DISPLAY_NAME
 }
 
@@ -458,7 +446,7 @@ function getFriendlyProviderErrorMessage(errorMessage: string, provider: string)
     normalized.includes("api error (401)") ||
     normalized.includes("api error (403)")
   ) {
-    return `Akses ${providerName} ditolak. Periksa kredensial provider aktif (OPENAI_API_KEY atau AGENT_ROUTER_TOKEN), izin model, dan endpoint API. Saldo kamu sudah otomatis direfund.`
+    return `Akses ${providerName} ditolak. Periksa OPENROUTER_API_KEY, izin model, dan endpoint OpenRouter. Saldo kamu sudah otomatis direfund.`
   }
 
   if (
@@ -596,7 +584,7 @@ async function parseGenerateRequest(request: NextRequest): Promise<GenerateReque
     return NextResponse.json({ error: "Model selection is required", code: "MODEL_REQUIRED" }, { status: 400 })
   }
 
-  if (selectedModel !== SWIFT_AI_MODEL_KEY && selectedModel !== DEEPSEEK_MODEL_KEY) {
+  if (selectedModel !== SWIFT_AI_MODEL_KEY) {
     return NextResponse.json({ error: "Selected model is not available. Use Swift AI.", code: "MODEL_NOT_AVAILABLE" }, { status: 403 })
   }
 
@@ -682,32 +670,9 @@ async function resolveGenerationModel(selectedModel: string) {
     }
   }
 
-  const canFallbackToOpenAi =
-    provider === "agentrouter" &&
-    env.aiFallbackProvider === "openai" &&
-    Boolean(env.openAiApiKey)
-
-  if (provider === "agentrouter" && !env.agentRouterApiKey && !canFallbackToOpenAi) {
+  if (!env.openRouterApiKey) {
     return {
-      error: NextResponse.json({ error: "AgentRouter provider is not configured" }, { status: 503 }),
-    }
-  }
-
-  if (provider === "openai" && !env.openAiApiKey) {
-    return {
-      error: NextResponse.json({ error: "OpenAI provider is not configured" }, { status: 503 }),
-    }
-  }
-
-  if (provider === "orchestrator" && (!env.openAiApiKey || !env.openAiApiUrl.includes("openrouter.ai"))) {
-    return {
-      error: NextResponse.json({ error: "Orchestrator provider is not configured" }, { status: 503 }),
-    }
-  }
-
-  if (provider === "deepseek" && !env.deepseekApiKey) {
-    return {
-      error: NextResponse.json({ error: "Swift AI Vision provider is not configured." }, { status: 503 }),
+      error: NextResponse.json({ error: "OPENROUTER_API_KEY is not configured." }, { status: 503 }),
     }
   }
 
