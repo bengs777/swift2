@@ -8,7 +8,7 @@ const MAX_REQUESTS_PER_MINUTE = Math.max(
 )
 const MAX_REQUESTS_PER_DAY = Math.max(
   MAX_REQUESTS_PER_MINUTE,
-  Math.round(getEnvNumber(80, "AI_RATE_LIMIT_PER_DAY", "GENERATE_RATE_LIMIT_PER_DAY"))
+  Math.round(getEnvNumber(500, "AI_RATE_LIMIT_PER_DAY", "GENERATE_RATE_LIMIT_PER_DAY"))
 )
 
 type Bucket = {
