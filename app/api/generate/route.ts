@@ -14,7 +14,7 @@ import { appendAIContextToPrompt, buildAIContextSnapshot } from "@/lib/ai/contex
 import { autoRepairFullStackFiles, validateFullStackFiles } from "@/lib/ai/fullstack-validator"
 import { ProviderRouter } from "@/lib/ai/provider-router"
 import type { ProviderName } from "@/lib/ai/provider-router"
-import { SWIFT_AI_DISPLAY_NAME, SWIFT_AI_MODEL_KEY } from "@/lib/ai/models"
+import { SWIFT_AI_DISPLAY_NAME, SWIFT_AI_MODEL_KEY, DEEPSEEK_MODEL_KEY, isVisionCapableModel } from "@/lib/ai/models"
 import { analyzePromptIntent, buildClarifyingPrompt } from "@/lib/ai/prompt-intent"
 import type { PromptLanguage } from "@/lib/ai/prompt-templates"
 import type { GeneratedFile, ProjectMemoryData, PromptAttachment } from "@/lib/types"
@@ -75,7 +75,7 @@ const PROJECT_STRUCTURE_CONTEXT_CHAR_LIMIT = 14000
 const PREVIEW_EXECUTABLE_FILE_PATTERN = /\.(tsx|ts|jsx|js|mjs|cjs)$/i
 const PREVIEW_JSON_FILE_PATTERN = /\.json$/i
 const PREVIEW_ASSET_FILE_PATTERN = /\.(css|scss|sass|less|md|env|prisma|html|txt|csv|yml|yaml|svg|png|jpe?g|gif|webp|avif|ico|bmp|mp4|webm|mp3|wav|ogg|woff2?|ttf|otf|lock|toml|ini|xml|pdf|webmanifest|manifest|d\.ts|d\.mts|d\.cts)$/i
-const SUPPORTED_PROVIDERS: ProviderName[] = ["agentrouter", "openai", "orchestrator"]
+const SUPPORTED_PROVIDERS: ProviderName[] = ["agentrouter", "openai", "orchestrator", "deepseek"]
 const COLLABORATION_MODES = ["build", "edit", "fix", "review", "ask"] as const
 
 type CollaborationMode = (typeof COLLABORATION_MODES)[number]
@@ -594,8 +594,8 @@ async function parseGenerateRequest(request: NextRequest): Promise<GenerateReque
     return NextResponse.json({ error: "Model selection is required", code: "MODEL_REQUIRED" }, { status: 400 })
   }
 
-  if (selectedModel !== SWIFT_AI_MODEL_KEY) {
-    return NextResponse.json({ error: "Swift AI is the only available model", code: "MODEL_NOT_AVAILABLE" }, { status: 403 })
+  if (selectedModel !== SWIFT_AI_MODEL_KEY && selectedModel !== DEEPSEEK_MODEL_KEY) {
+    return NextResponse.json({ error: "Selected model is not available. Use Swift AI.", code: "MODEL_NOT_AVAILABLE" }, { status: 403 })
   }
 
   if (!projectId) {
@@ -700,6 +700,12 @@ async function resolveGenerationModel(selectedModel: string) {
   if (provider === "orchestrator" && (!env.openAiApiKey || !env.openAiApiUrl.includes("openrouter.ai"))) {
     return {
       error: NextResponse.json({ error: "Orchestrator provider is not configured" }, { status: 503 }),
+    }
+  }
+
+  if (provider === "deepseek" && !env.deepseekApiKey) {
+    return {
+      error: NextResponse.json({ error: "Swift AI Vision provider is not configured." }, { status: 503 }),
     }
   }
 
@@ -1790,10 +1796,12 @@ function normalizeAttachments(attachments: PromptAttachment[] | undefined): Prom
   return cleaned
 }
 
-function appendAttachmentsToPrompt(prompt: string, attachments: PromptAttachment[]) {
+function appendAttachmentsToPrompt(prompt: string, attachments: PromptAttachment[], modelName?: string) {
   if (attachments.length === 0) {
     return prompt
   }
+
+  const modelSupportsVision = modelName ? isVisionCapableModel(modelName) : false
 
   let usedChars = 0
   const lines = attachments
@@ -1805,6 +1813,9 @@ function appendAttachmentsToPrompt(prompt: string, attachments: PromptAttachment
       const header = `Attachment ${index + 1}: ${attachment.name} (${attachment.mimeType}, ${attachment.size} bytes)`
 
       if (attachment.kind === "image") {
+        if (!modelSupportsVision) {
+          return `${header}\nKind: image\nNote: Image content was attached but the selected model does not support image input. Please infer or describe the image based on the filename "${attachment.name}".`
+        }
         const preview = attachment.content.slice(0, 1400)
         usedChars += preview.length
         return `${header}\nKind: image\nDataURL preview:\n${preview}`

@@ -5,6 +5,37 @@ export const SWIFT_AI_MODEL_KEY = "swift-ai"
 export const SWIFT_AI_MODEL_NAME = SWIFT_AI_MODEL_KEY
 export const SWIFT_AI_DISPLAY_NAME = "Swift AI"
 
+export const DEEPSEEK_MODEL_KEY = "deepseek-flash"
+export const DEEPSEEK_MODEL_NAME = "deepseek-chat"
+export const DEEPSEEK_DISPLAY_NAME = "Swift AI Vision"
+export const DEEPSEEK_API_URL = "https://api.deepseek.com"
+
+export const VISION_CAPABLE_MODELS = new Set([
+  "deepseek-chat",
+  "deepseek-reasoner",
+  "gpt-4o",
+  "gpt-4o-mini",
+  "gpt-4-vision-preview",
+  "gpt-4-turbo",
+  "claude-3-opus",
+  "claude-3-sonnet",
+  "claude-3-haiku",
+  "claude-3.5-sonnet",
+  "qwen/qwen2.5-vl",
+  "qwen/qwq",
+])
+
+export function isVisionCapableModel(modelName: string): boolean {
+  const normalized = modelName.toLowerCase().trim()
+  for (const visionModel of VISION_CAPABLE_MODELS) {
+    if (normalized.includes(visionModel.toLowerCase())) return true
+  }
+  if (normalized.includes("vision")) return true
+  if (normalized.includes("vl-")) return true
+  if (normalized.includes("vl")) return true
+  return false
+}
+
 export type ModelDisplayMeta = Pick<ModelOption, "label" | "description" | "note" | "rank">
 
 const OPENROUTER_MODEL_ALIAS: Record<string, string> = {
@@ -35,10 +66,22 @@ export const OPENROUTER_FREE_MODEL_OPTIONS: ModelOption[] = [
     description: "AI coding utama Swift untuk membangun dan memperbaiki aplikasi.",
     note: "Rp 2.000 untuk setiap prompt",
   },
+  {
+    key: DEEPSEEK_MODEL_KEY,
+    label: DEEPSEEK_DISPLAY_NAME,
+    provider: "deepseek",
+    modelName: DEEPSEEK_MODEL_NAME,
+    price: PROMPT_FEE_IDR,
+    isActive: true,
+    rank: 2,
+    description: "Swift AI Vision cepat untuk full-stack generation dan mendukung image input.",
+    note: "Rp 2.000 untuk setiap prompt",
+  },
 ]
 
 const ACTIVE_OPENROUTER_MODEL_KEYS = new Set([
   SWIFT_AI_MODEL_KEY,
+  DEEPSEEK_MODEL_KEY,
 ])
 
 const MODEL_LOOKUP = new Map<string, ModelOption>(
@@ -76,7 +119,7 @@ export const OPENROUTER_MODEL_KEYS = DEFAULT_MODEL_OPTIONS.map((model) => model.
 
 export const isFreeModel = (model: string) => {
   const normalized = normalizeModelKey(model)
-  return normalized === SWIFT_AI_MODEL_KEY || normalized === SWIFT_AI_MODEL_NAME
+  return normalized === SWIFT_AI_MODEL_KEY || normalized === SWIFT_AI_MODEL_NAME || normalized === DEEPSEEK_MODEL_KEY
 }
 
 export const getModelPrice = (model: string) => {

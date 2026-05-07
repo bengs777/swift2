@@ -198,7 +198,7 @@ export interface Message {
 export interface ModelOption {
   key: string
   label: string
-  provider: "agentrouter" | "bluesminds" | "openai" | "v0" | "orchestrator"
+  provider: "agentrouter" | "bluesminds" | "openai" | "v0" | "orchestrator" | "deepseek"
   modelName: string
   price: number
   isActive: boolean

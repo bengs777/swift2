@@ -79,11 +79,11 @@ export function generateSandboxHtml(
         if (n.includes('navbar') || n.includes('header')) {
           return React.createElement('header', { className: 'sticky top-0 z-10 border-b bg-white/95 px-6 py-4 shadow-sm' },
             React.createElement('div', { className: 'mx-auto flex max-w-6xl items-center justify-between gap-4' },
-              React.createElement('div', { className: 'text-xl font-black text-emerald-600' }, 'JBB'),
-              React.createElement('div', { className: 'hidden flex-1 md:block' }, React.createElement('input', { className: 'w-full rounded-md border px-4 py-2 text-sm', placeholder: 'Cari produk, brand, dan toko' })),
+              React.createElement('div', { className: 'text-xl font-black text-emerald-600' }, 'Swift Preview'),
+              React.createElement('div', { className: 'hidden flex-1 md:block' }, React.createElement('input', { className: 'w-full rounded-md border px-4 py-2 text-sm', placeholder: 'Cari konten...' })),
               React.createElement('nav', { className: 'flex items-center gap-3 text-sm font-medium' },
-                React.createElement('a', { href: '#products' }, 'Produk'),
-                React.createElement('a', { href: '#cart' }, 'Keranjang')
+                React.createElement('a', { href: '#products' }, 'Konten'),
+                React.createElement('a', { href: '#categories' }, 'Topik')
               )
             )
           )
@@ -92,19 +92,19 @@ export function generateSandboxHtml(
           return React.createElement('section', { className: 'bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500 px-6 py-14 text-white' },
             React.createElement('div', { className: 'mx-auto grid max-w-6xl gap-8 md:grid-cols-[1.1fr_.9fr]' },
               React.createElement('div', null,
-                React.createElement('p', { className: 'text-sm font-semibold uppercase tracking-wide' }, 'Marketplace JBB'),
-                React.createElement('h1', { className: 'mt-3 text-4xl font-black md:text-5xl' }, 'Belanja cepat, harga bijak, semua dari JBB'),
-                React.createElement('p', { className: 'mt-4 max-w-xl text-white/90' }, 'Temukan produk pilihan, promo harian, kategori populer, dan pengalaman belanja yang terasa seperti marketplace modern.'),
+                React.createElement('p', { className: 'text-sm font-semibold uppercase tracking-wide' }, 'Swift generated preview'),
+                React.createElement('h1', { className: 'mt-3 text-4xl font-black md:text-5xl' }, 'Konten generated siap ditinjau'),
+                React.createElement('p', { className: 'mt-4 max-w-xl text-white/90' }, 'Preview ini menampilkan struktur visual dari project yang dibuat Swift AI tanpa mengunci branding ke project lama.'),
                 React.createElement('div', { className: 'mt-6 flex flex-wrap gap-3' },
-                  React.createElement('a', { href: '#products', className: 'rounded-md bg-white px-5 py-3 text-sm font-bold text-emerald-700' }, 'Mulai belanja'),
-                  React.createElement('a', { href: '#categories', className: 'rounded-md border border-white/70 px-5 py-3 text-sm font-bold text-white' }, 'Lihat kategori')
+                  React.createElement('a', { href: '#products', className: 'rounded-md bg-white px-5 py-3 text-sm font-bold text-emerald-700' }, 'Lihat konten'),
+                  React.createElement('a', { href: '#categories', className: 'rounded-md border border-white/70 px-5 py-3 text-sm font-bold text-white' }, 'Lihat topik')
                 )
               ),
               React.createElement('div', { className: 'grid grid-cols-2 gap-3' },
-                ['Flash Sale', 'Gratis Ongkir', 'Official Store', 'Voucher JBB'].map(function(item){
+                ['Headline', 'Populer', 'Rekomendasi', 'Update'].map(function(item){
                   return React.createElement('div', { key: item, className: 'rounded-lg bg-white/15 p-5 shadow-lg backdrop-blur' },
                     React.createElement('div', { className: 'text-2xl font-black' }, item),
-                    React.createElement('p', { className: 'mt-2 text-sm text-white/85' }, 'Promo aktif hari ini')
+                    React.createElement('p', { className: 'mt-2 text-sm text-white/85' }, 'Konten pilihan hari ini')
                   )
                 })
               )
@@ -113,9 +113,9 @@ export function generateSandboxHtml(
         }
         if (n.includes('categor')) {
           return React.createElement('section', { id: 'categories', className: 'mx-auto max-w-6xl px-6 py-10' },
-            React.createElement('h2', { className: 'text-2xl font-bold' }, 'Kategori Populer'),
+            React.createElement('h2', { className: 'text-2xl font-bold' }, 'Topik Populer'),
             React.createElement('div', { className: 'mt-5 grid grid-cols-2 gap-3 md:grid-cols-6' },
-              ['Fashion', 'Elektronik', 'Rumah', 'Kecantikan', 'Hobi', 'Voucher'].map(function(item){
+              ['Utama', 'Populer', 'Update', 'Panduan', 'Insight', 'Pilihan'].map(function(item){
                 return React.createElement('div', { key: item, className: 'rounded-lg border bg-white p-4 text-center shadow-sm' },
                   React.createElement('div', { className: 'mx-auto mb-3 h-12 w-12 rounded-full bg-emerald-100' }),
                   React.createElement('p', { className: 'text-sm font-semibold' }, item)
@@ -128,19 +128,19 @@ export function generateSandboxHtml(
           return React.createElement('section', { id: 'products', className: 'mx-auto max-w-6xl px-6 py-10' },
             React.createElement('div', { className: 'flex items-end justify-between gap-4' },
               React.createElement('div', null,
-                React.createElement('h2', { className: 'text-2xl font-bold' }, 'Produk Pilihan'),
-                React.createElement('p', { className: 'mt-1 text-sm text-slate-600' }, 'Preview produk dari hasil generate Swift AI')
+                React.createElement('h2', { className: 'text-2xl font-bold' }, 'Konten Pilihan'),
+                React.createElement('p', { className: 'mt-1 text-sm text-slate-600' }, 'Preview konten dari hasil generate Swift AI')
               ),
               React.createElement('button', { className: 'rounded-md border px-4 py-2 text-sm font-semibold' }, 'Lihat semua')
             ),
             React.createElement('div', { className: 'mt-5 grid grid-cols-2 gap-4 md:grid-cols-4' },
-              ['Sepatu Olahraga Premium', 'Tas Ransel Anti Air', 'Headset Gaming', 'Kemeja Casual'].map(function(item, index){
+              ['Headline Utama', 'Kabar Terbaru', 'Insight Pilihan', 'Update Hari Ini'].map(function(item, index){
                 return React.createElement('article', { key: item, className: 'overflow-hidden rounded-lg border bg-white shadow-sm' },
                   React.createElement('div', { className: 'aspect-square bg-gradient-to-br from-slate-100 to-emerald-100' }),
                   React.createElement('div', { className: 'space-y-2 p-3' },
                     React.createElement('h3', { className: 'line-clamp-2 text-sm font-semibold' }, item),
-                    React.createElement('p', { className: 'font-bold text-emerald-600' }, 'Rp ' + ([250000,180000,320000,150000][index]).toLocaleString('id-ID')),
-                    React.createElement('p', { className: 'text-xs text-slate-500' }, 'Terjual ' + ([1200,890,650,430][index]).toLocaleString('id-ID'))
+                    React.createElement('p', { className: 'font-bold text-emerald-600' }, ['Breaking', 'Update', 'Analisis', 'Pilihan'][index]),
+                    React.createElement('p', { className: 'text-xs text-slate-500' }, ([12,8,6,4][index]) + ' menit baca')
                   )
                 )
               })
@@ -150,7 +150,7 @@ export function generateSandboxHtml(
         if (n.includes('footer')) {
           return React.createElement('footer', { className: 'mt-10 border-t bg-slate-950 px-6 py-8 text-white' },
             React.createElement('div', { className: 'mx-auto flex max-w-6xl flex-col justify-between gap-4 md:flex-row' },
-              React.createElement('div', null, React.createElement('h2', { className: 'text-xl font-black' }, 'JBB'), React.createElement('p', { className: 'mt-1 text-sm text-slate-300' }, 'Marketplace belanja bijak untuk semua.')),
+              React.createElement('div', null, React.createElement('h2', { className: 'text-xl font-black' }, 'Swift Preview'), React.createElement('p', { className: 'mt-1 text-sm text-slate-300' }, 'Generated fallback preview untuk project saat ini.')),
               React.createElement('p', { className: 'text-sm text-slate-400' }, 'Generated preview by Swift AI')
             )
           )

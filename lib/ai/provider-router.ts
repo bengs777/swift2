@@ -1,8 +1,9 @@
 import { env } from "@/lib/env"
 import type { PromptLanguage } from "@/lib/ai/prompt-templates"
-import { DEFAULT_MODEL_OPTIONS, SWIFT_AI_MODEL_KEY, isFreeModel } from "@/lib/ai/models"
+import { DEFAULT_MODEL_OPTIONS, SWIFT_AI_MODEL_KEY, DEEPSEEK_MODEL_KEY, isFreeModel } from "@/lib/ai/models"
+import type { PromptAttachment } from "@/lib/types"
 
-export type ProviderName = "agentrouter" | "openai" | "orchestrator"
+export type ProviderName = "agentrouter" | "openai" | "orchestrator" | "deepseek"
 
 type ProviderRequest = {
   provider: ProviderName
@@ -11,6 +12,7 @@ type ProviderRequest = {
   mode?: "chat" | "files" | "inspect"
   promptLanguage?: PromptLanguage
   temperatureOverride?: number
+  attachments?: PromptAttachment[]
 }
 
 type ProviderResponse = {
@@ -159,6 +161,36 @@ export class ProviderRouter {
       }
     }
 
+    if (provider === "deepseek") {
+      try {
+        const deepseek = await this.callDeepSeek(modelName, prompt, mode, promptLanguage, temperatureOverride)
+        return {
+          message: deepseek.message,
+          providerUsed: "deepseek",
+          modelUsed: modelName,
+          usedFallback: false,
+        }
+      } catch (error) {
+        const primaryError = error instanceof Error ? error : new Error(String(error))
+        if (env.openAiApiKey) {
+          try {
+            const fallback = await this.callOpenAI(env.openAiDefaultModel, prompt, mode, promptLanguage, temperatureOverride)
+            return {
+              message: fallback.message,
+              providerUsed: "openai",
+              modelUsed: env.openAiDefaultModel,
+              usedFallback: true,
+              fallbackFrom: "deepseek",
+              primaryError: primaryError.message,
+            }
+          } catch {
+            throw primaryError
+          }
+        }
+        throw primaryError
+      }
+    }
+
     throw new Error(`Unsupported AI provider: ${provider}`)
   }
 
@@ -248,16 +280,19 @@ export class ProviderRouter {
 
     const upstreamModelName = this.resolveOpenAiModelName(modelName)
     let lastError: Error | null = null
+    let tokenReductionFactor = 1
 
-    for (let attempt = 0; attempt < env.aiMaxRetries; attempt += 1) {
+    for (let attempt = 0; attempt < env.aiMaxRetries + 2; attempt += 1) {
       try {
+        const maxTokens = this.getMaxTokens(mode)
+        const effectiveMaxTokens = Math.max(512, Math.floor(maxTokens / tokenReductionFactor))
         const response = await this.fetchWithTimeout(
           `${env.openAiApiUrl}/chat/completions`,
           {
             method: "POST",
             headers: this.buildOpenAiHeaders(),
             body: JSON.stringify(
-              this.buildOpenAiPayload(upstreamModelName, prompt, mode, promptLanguage, temperatureOverride)
+              this.buildOpenAiPayload(upstreamModelName, prompt, mode, promptLanguage, temperatureOverride, effectiveMaxTokens)
             ),
           },
           "OpenAI",
@@ -271,7 +306,85 @@ export class ProviderRouter {
           }
         }
 
-        const error = new Error(await this.extractError(response, "OpenAI"))
+        const errorText = await this.extractError(response, "OpenAI")
+        const error = new Error(errorText)
+        lastError = error
+
+        if (response.status === 402 && tokenReductionFactor < 8) {
+          tokenReductionFactor *= 2
+          continue
+        }
+
+        const shouldRetry = response.status === 429 || response.status >= 500
+        if (!shouldRetry || attempt >= env.aiMaxRetries - 1) {
+          break
+        }
+
+        await this.sleep(800 * (attempt + 1))
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error))
+        if (attempt >= env.aiMaxRetries - 1) {
+          await this.sleep(800 * (attempt + 1))
+          continue
+        }
+      }
+    }
+
+    throw lastError || new Error("OpenAI request failed.")
+  }
+
+  private static async callDeepSeek(
+    modelName: string,
+    prompt: string,
+    mode: "chat" | "files" | "inspect",
+    promptLanguage: PromptLanguage = "id",
+    temperatureOverride?: number
+  ): Promise<ProviderMessage> {
+    if (!env.deepseekApiKey) {
+      throw new Error("Swift AI Vision provider is not configured")
+    }
+
+    const upstreamModelName = modelName === DEEPSEEK_MODEL_KEY ? env.deepseekDefaultModel : modelName
+    let lastError: Error | null = null
+
+    for (let attempt = 0; attempt < env.aiMaxRetries; attempt += 1) {
+      try {
+        const payload: Record<string, unknown> = {
+          model: upstreamModelName,
+          messages: this.buildMessages(prompt, mode, promptLanguage),
+          temperature: this.getTemperature(mode, temperatureOverride),
+          top_p: 0.9,
+          max_tokens: this.getMaxTokens(mode),
+        }
+
+        if (mode === "files") {
+          payload.response_format = {
+            type: "json_object",
+          }
+        }
+
+        const response = await this.fetchWithTimeout(
+          `${env.deepseekApiUrl}/chat/completions`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${env.deepseekApiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          },
+          "Swift AI Vision",
+          this.getTimeoutMs(mode)
+        )
+
+        if (response.ok) {
+          const data = await response.json()
+          return {
+            message: data.choices?.[0]?.message?.content || "No response returned by Swift AI Vision.",
+          }
+        }
+
+        const error = new Error(await this.extractError(response, "Swift AI Vision"))
         lastError = error
 
         const shouldRetry = response.status === 429 || response.status >= 500
@@ -289,7 +402,7 @@ export class ProviderRouter {
       }
     }
 
-    throw lastError || new Error("OpenAI request failed.")
+    throw lastError || new Error("Swift AI Vision request failed.")
   }
 
   private static resolveOpenAiModelName(modelName: string) {
@@ -301,14 +414,15 @@ export class ProviderRouter {
     prompt: string,
     mode: "chat" | "files" | "inspect",
     promptLanguage: PromptLanguage = "id",
-    temperatureOverride?: number
+    temperatureOverride?: number,
+    maxTokensOverride?: number
   ) {
     const payload: Record<string, unknown> = {
       model: modelName,
       messages: this.buildMessages(prompt, mode, promptLanguage),
       temperature: this.getTemperature(mode, temperatureOverride),
       top_p: 0.9,
-      max_tokens: this.getMaxTokens(mode),
+      max_tokens: maxTokensOverride ?? this.getMaxTokens(mode),
     }
 
     if (mode === "files") {
@@ -445,6 +559,10 @@ export class ProviderRouter {
       if (!candidates.includes(normalized)) {
         candidates.push(normalized)
       }
+    }
+
+    if (env.deepseekApiKey) {
+      pushUnique(env.deepseekDefaultModel)
     }
 
     if (env.openAiApiUrl.includes("openrouter.ai")) {

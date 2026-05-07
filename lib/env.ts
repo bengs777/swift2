@@ -34,7 +34,7 @@ const getEnvNumber = (fallback: number, ...keys: string[]) => {
 
 const normalizeProvider = (value: string) => {
   const normalized = value.toLowerCase().trim()
-  if (normalized === "agentrouter" || normalized === "openai" || normalized === "orchestrator") {
+  if (normalized === "agentrouter" || normalized === "openai" || normalized === "orchestrator" || normalized === "deepseek") {
     return normalized
   }
   return ""
@@ -43,10 +43,10 @@ const normalizeProvider = (value: string) => {
 const normalizeTokenLimit = (value: number) => {
   const rounded = Math.round(value)
   if (!Number.isFinite(rounded)) {
-    return 4000
+    return 3000
   }
 
-  return Math.min(20_000, Math.max(256, rounded))
+  return Math.min(12_000, Math.max(256, rounded))
 }
 
 const normalizeUrl = (url: string) => url.replace(/\/+$/, "")
@@ -88,7 +88,7 @@ export const env = {
   aiFallbackProvider: normalizeProvider(getEnv("AI_FALLBACK_PROVIDER")),
   aiTimeoutMs: getEnvNumber(20_000, "AI_TIMEOUT_MS"),
   aiMaxRetries: Math.max(1, Math.round(getEnvNumber(2, "AI_MAX_RETRIES"))),
-  aiMaxOutputTokens: normalizeTokenLimit(getEnvNumber(4000, "AI_MAX_OUTPUT_TOKENS", "OPENAI_MAX_TOKENS", "AI_MAX_TOKENS")),
+  aiMaxOutputTokens: normalizeTokenLimit(getEnvNumber(3000, "AI_MAX_OUTPUT_TOKENS", "OPENAI_MAX_TOKENS", "AI_MAX_TOKENS")),
   providerStatusCacheTtlMs: Math.max(
     60_000,
     Math.round(getEnvNumber(86_400_000, "PROVIDER_STATUS_CACHE_TTL_MS"))
@@ -106,6 +106,9 @@ export const env = {
   openAiDefaultModel: OPENAI_DEFAULT_MODEL,
   openAiModels: getEnvList("OPENAI_MODELS", "OPENAI_MODEL_LIST"),
   openAiFallbackModel: OPENAI_FALLBACK_MODEL,
+  deepseekApiKey: getEnv("DEEPSEEK_API_KEY"),
+  deepseekApiUrl: normalizeUrl(getEnv("DEEPSEEK_API_URL") || "https://api.deepseek.com"),
+  deepseekDefaultModel: getEnv("DEEPSEEK_DEFAULT_MODEL") || "deepseek-chat",
   devOwnerEmail: DEV_OWNER_EMAIL,
   supabaseServiceRoleKey,
   supabasePublicAnonKey,
@@ -154,6 +157,10 @@ if (env.nodeEnv === "production") {
 
   if (env.aiPrimaryProvider === "orchestrator" && !env.openAiApiKey) {
     missing.push("OPENAI_API_KEY")
+  }
+
+  if (env.aiPrimaryProvider === "deepseek" && !env.deepseekApiKey) {
+    missing.push("DEEPSEEK_API_KEY")
   }
 
   if (missing.length > 0) {

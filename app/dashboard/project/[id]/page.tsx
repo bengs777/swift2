@@ -386,22 +386,36 @@ export default function EditorPage() {
       normalized.includes("more credits") ||
       normalized.includes("can only afford") ||
       normalized.includes("fewer max_tokens") ||
-      normalized.includes("max_tokens") ||
-      normalized.includes("credits") ||
       normalized.includes("insufficient_user_quota") ||
-      normalized.includes("额度不足") ||
-      normalized.includes("rate-limit") ||
-      normalized.includes("rate limited")
+      normalized.includes("额度不足")
     ) {
       return {
         status: "error",
         issue: "quota",
-        reason: normalized.includes("max_tokens")
+        reason: normalized.includes("fewer max_tokens") || normalized.includes("can only afford")
           ? "Credit OpenRouter tidak cukup untuk batas output request saat ini"
           : "Provider quota atau upstream rate limit sedang penuh",
-        action: normalized.includes("max_tokens")
+        action: normalized.includes("fewer max_tokens") || normalized.includes("can only afford")
           ? "Turunkan AI_MAX_OUTPUT_TOKENS di .env lalu restart dev server, atau isi ulang credit OpenRouter."
           : "Coba lagi beberapa menit, ganti model, atau gunakan key provider sendiri (BYOK).",
+        checkedAt: new Date().toISOString(),
+      }
+    }
+
+    if (
+      normalized.includes("rate-limit") ||
+      normalized.includes("rate limited") ||
+      normalized.includes("max_tokens")
+    ) {
+      return {
+        status: "error",
+        issue: "latency",
+        reason: normalized.includes("max_tokens")
+          ? "Batas token output terlalu tinggi untuk request ini"
+          : "Provider sedang rate-limited",
+        action: normalized.includes("max_tokens")
+          ? "Coba lagi dengan prompt lebih singkat, atau turunkan AI_MAX_OUTPUT_TOKENS di .env."
+          : "Tunggu beberapa menit lalu coba lagi.",
         checkedAt: new Date().toISOString(),
       }
     }

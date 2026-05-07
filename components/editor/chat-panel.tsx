@@ -14,10 +14,12 @@ import type { ModelOption, PromptAttachment } from "@/lib/types"
 import { analyzePromptIntent } from "@/lib/ai/prompt-intent"
 import { getTemplate, PROMPT_LANGUAGE_LABELS } from "@/lib/ai/prompt-templates"
 import type { PromptLanguage, PromptTemplateKey, TemplateVariant } from "@/lib/ai/prompt-templates"
+import { DEEPSEEK_MODEL_KEY } from "@/lib/ai/models"
 import { ProviderBadge } from "@/components/editor/v0-model-badge"
 
 const MAX_PROMPT_LENGTH = 12000
 const MAX_ATTACHMENTS = 5
+const VISION_CAPABLE_MODEL_KEYS = new Set([DEEPSEEK_MODEL_KEY])
 const MAX_FILE_SIZE_BYTES = 3 * 1024 * 1024
 const MAX_TEXT_FILE_CHARS = 18000
 const MAX_IMAGE_DATA_URL_CHARS = 18000
@@ -473,6 +475,8 @@ export function ChatPanel({
   const collaborationCopy = COLLABORATION_MODES[promptLanguage]
   const promptIntent = analyzePromptIntent(input, promptLanguage)
   const promptExamples = getPromptExamples(templateKey, promptLanguage)
+  const selectedModelSupportsVision = VISION_CAPABLE_MODEL_KEYS.has(selectedModel)
+  const hasImageAttachments = attachments.some((attachment) => attachment.kind === "image")
   const canSubmit = Boolean(
     input.trim() &&
       selectedModel &&
@@ -1069,6 +1073,13 @@ export function ChatPanel({
           </Collapsible>
           {attachmentError && (
             <p className="text-xs text-destructive">{attachmentError}</p>
+          )}
+          {hasImageAttachments && !selectedModelSupportsVision && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              {promptLanguage === "id"
+                ? "Model yang dipilih tidak mendukung input gambar. Gambar akan dikirim sebagai referensi nama file saja. Pilih Swift AI Vision untuk mendukung image input."
+                : "The selected model does not support image input. Images will be sent as filename references only. Select Swift AI Vision for image input support."}
+            </div>
           )}
           {attachments.length > 0 && (
             <div className="flex flex-wrap gap-2">

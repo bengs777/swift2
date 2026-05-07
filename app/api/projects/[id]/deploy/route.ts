@@ -111,7 +111,7 @@ export default config
 
   const missingImports = collectMissingLocalImports(Array.from(byPath.values()), byPath)
   for (const missing of missingImports) {
-    addFile(missing.path, buildStubModule(missing.path, missing.bindings), inferLanguageFromPath(missing.path))
+    addFile(missing.path, buildStubModule(missing.path, missing.bindings, safeName), inferLanguageFromPath(missing.path))
   }
 
   return Array.from(byPath.values()).sort((left, right) => left.path.localeCompare(right.path))
@@ -330,7 +330,7 @@ function joinRelativePath(fromPath: string, source: string) {
   return stack.join("/")
 }
 
-function buildStubModule(path: string, bindings: ImportBinding[]) {
+function buildStubModule(path: string, bindings: ImportBinding[], projectName: string) {
   if (/lib\/context\/cart-context\.tsx$/i.test(path)) {
     return `"use client"
 
@@ -365,21 +365,31 @@ export function useCart() {
   const uniqueNames = Array.from(new Set(componentNames.length > 0 ? componentNames : ["GeneratedSection"]))
 
   return uniqueNames
-    .map((name) => buildStubComponent(name, path))
+    .map((name) => buildStubComponent(name, path, projectName))
     .join("\n\n")
 }
 
-function buildStubComponent(name: string, path: string) {
+function buildStubComponent(name: string, path: string, projectName: string) {
+  const brand = JSON.stringify(projectName)
+  const brandText = projectName
+  const isNews = /berita|news|detik|media|portal/i.test(projectName)
+  const headline = isNews
+    ? `Berita terbaru dan kabar pilihan dari ${brandText}`
+    : `Pengalaman digital modern untuk ${brandText}`
+  const supportingCopy = isNews
+    ? "Baca headline utama, topik populer, dan rangkuman berita yang dirancang agar mudah dipindai."
+    : "Jelajahi konten utama, fitur pilihan, dan pengalaman web yang sudah dirapikan oleh Swift AI."
+
   if (/navbar|header/i.test(name)) {
     return `export function ${name}() {
   return (
     <header className="sticky top-0 z-20 border-b bg-white/95 px-6 py-4 shadow-sm">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-        <a className="text-xl font-black text-emerald-600" href="/">JBB</a>
-        <input className="hidden flex-1 rounded-md border px-4 py-2 text-sm md:block" placeholder="Cari produk, brand, dan toko" />
+        <a className="text-xl font-black text-emerald-600" href="/">{${brand}}</a>
+        <input className="hidden flex-1 rounded-md border px-4 py-2 text-sm md:block" placeholder="Cari konten..." />
         <nav className="flex items-center gap-4 text-sm font-semibold">
-          <a href="/products">Produk</a>
-          <a href="/cart">Keranjang</a>
+          <a href="/">Home</a>
+          <a href="#content">Konten</a>
         </nav>
       </div>
     </header>
@@ -393,16 +403,16 @@ function buildStubComponent(name: string, path: string) {
     <section className="bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500 px-6 py-16 text-white">
       <div className="mx-auto grid max-w-6xl gap-8 md:grid-cols-[1.15fr_.85fr]">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide">Marketplace JBB</p>
-          <h1 className="mt-3 text-4xl font-black md:text-5xl">Belanja cepat, harga bijak, semua dari JBB</h1>
-          <p className="mt-4 max-w-xl text-white/90">Temukan produk pilihan, promo harian, kategori populer, dan pengalaman belanja modern.</p>
-          <a className="mt-6 inline-flex rounded-md bg-white px-5 py-3 text-sm font-bold text-emerald-700" href="/products">Mulai belanja</a>
+          <p className="text-sm font-semibold uppercase tracking-wide">{${brand}}</p>
+          <h1 className="mt-3 text-4xl font-black md:text-5xl">${headline}</h1>
+          <p className="mt-4 max-w-xl text-white/90">${supportingCopy}</p>
+          <a className="mt-6 inline-flex rounded-md bg-white px-5 py-3 text-sm font-bold text-emerald-700" href="#content">Mulai lihat</a>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          {["Flash Sale", "Gratis Ongkir", "Official Store", "Voucher"].map((item) => (
+          {["Headline", "Populer", "Rekomendasi", "Update"].map((item) => (
             <div key={item} className="rounded-lg bg-white/15 p-5 shadow-lg backdrop-blur">
               <div className="text-2xl font-black">{item}</div>
-              <p className="mt-2 text-sm text-white/85">Promo aktif hari ini</p>
+              <p className="mt-2 text-sm text-white/85">Konten pilihan hari ini</p>
             </div>
           ))}
         </div>
@@ -415,10 +425,10 @@ function buildStubComponent(name: string, path: string) {
   if (/categor/i.test(name)) {
     return `export function ${name}() {
   return (
-    <section className="mx-auto max-w-6xl px-6 py-10">
-      <h2 className="text-2xl font-bold">Kategori Populer</h2>
+    <section id="content" className="mx-auto max-w-6xl px-6 py-10">
+      <h2 className="text-2xl font-bold">Topik Populer</h2>
       <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-6">
-        {["Fashion", "Elektronik", "Rumah", "Kecantikan", "Hobi", "Voucher"].map((item) => (
+        {["Nasional", "Bisnis", "Teknologi", "Lifestyle", "Olahraga", "Opini"].map((item) => (
           <div key={item} className="rounded-lg border bg-white p-4 text-center shadow-sm">
             <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-emerald-100" />
             <p className="text-sm font-semibold">{item}</p>
@@ -432,18 +442,18 @@ function buildStubComponent(name: string, path: string) {
 
   if (/product|grid|featured/i.test(name)) {
     return `export function ${name}() {
-  const products = ["Sepatu Olahraga Premium", "Tas Ransel Anti Air", "Headset Gaming", "Kemeja Casual"]
+  const products = ["Headline Utama", "Kabar Bisnis", "Teknologi Hari Ini", "Cerita Pilihan"]
   return (
     <section className="mx-auto max-w-6xl px-6 py-10">
-      <h2 className="text-2xl font-bold">Produk Pilihan</h2>
+      <h2 className="text-2xl font-bold">Konten Pilihan</h2>
       <div className="mt-5 grid grid-cols-2 gap-4 md:grid-cols-4">
         {products.map((item, index) => (
           <article key={item} className="overflow-hidden rounded-lg border bg-white shadow-sm">
             <div className="aspect-square bg-gradient-to-br from-slate-100 to-emerald-100" />
             <div className="space-y-2 p-3">
               <h3 className="line-clamp-2 text-sm font-semibold">{item}</h3>
-              <p className="font-bold text-emerald-600">Rp {[250000, 180000, 320000, 150000][index].toLocaleString("id-ID")}</p>
-              <p className="text-xs text-slate-500">Terjual {[1200, 890, 650, 430][index].toLocaleString("id-ID")}</p>
+              <p className="font-bold text-emerald-600">{["Breaking", "Analisis", "Update", "Pilihan"][index]}</p>
+              <p className="text-xs text-slate-500">{[12, 8, 6, 4][index]} menit baca</p>
             </div>
           </article>
         ))}
@@ -459,8 +469,8 @@ function buildStubComponent(name: string, path: string) {
     <footer className="mt-10 border-t bg-slate-950 px-6 py-8 text-white">
       <div className="mx-auto flex max-w-6xl flex-col justify-between gap-4 md:flex-row">
         <div>
-          <h2 className="text-xl font-black">JBB</h2>
-          <p className="mt-1 text-sm text-slate-300">Marketplace belanja bijak untuk semua.</p>
+          <h2 className="text-xl font-black">{${brand}}</h2>
+          <p className="mt-1 text-sm text-slate-300">Generated fallback page untuk project {${brand}}.</p>
         </div>
         <p className="text-sm text-slate-400">Generated by Swift AI</p>
       </div>

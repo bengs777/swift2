@@ -82,14 +82,27 @@ async function syncProjectFiles(
       created += 1
     }
 
-    await tx.$executeRaw`
-      INSERT INTO ProjectFile (id, projectId, path, content, language, createdAt, updatedAt)
-      VALUES (${crypto.randomUUID()}, ${projectId}, ${file.path}, ${file.content}, ${language}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      ON CONFLICT(projectId, path) DO UPDATE SET
-        content = excluded.content,
-        language = excluded.language,
-        updatedAt = CURRENT_TIMESTAMP
-    `
+    if (existing) {
+      await tx.projectFile.update({
+        where: { id: existing.id },
+        data: {
+          content: file.content,
+          language,
+          updatedAt: new Date(),
+        },
+      })
+      continue
+    }
+
+    await tx.projectFile.create({
+      data: {
+        id: crypto.randomUUID(),
+        projectId,
+        path: file.path,
+        content: file.content,
+        language,
+      },
+    })
   }
 
   const staleFiles = existingFiles.filter((file) => !nextPaths.includes(file.path))
