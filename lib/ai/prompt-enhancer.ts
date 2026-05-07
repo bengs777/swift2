@@ -82,6 +82,22 @@ function buildLocalPromptDraft(prompt: string): PromptDraft {
   const looksLikeBooking = hasAny(normalized, ["booking", "reservation", "reservasi", "appointment", "janji temu", "jadwal", "slot"])
   const looksLikeCrm = hasAny(normalized, ["crm", "pipeline", "lead management", "lead", "sales", "prospek", "pelanggan"])
   const looksLikeBlog = hasAny(normalized, ["blog", "article", "artikel", "content", "konten", "berita", "post"])
+  const looksLikeTrading = hasAny(normalized, [
+    "trading",
+    "forex",
+    "crypto",
+    "kripto",
+    "saham",
+    "mata uang",
+    "currency",
+    "exchange",
+    "market",
+    "candlestick",
+    "order book",
+    "watchlist",
+    "portfolio",
+    "posisi",
+  ])
   const looksLikeLaundry = hasAny(normalized, ["laundry", "cuci", "dry clean", "setrika"])
   const looksLikeClinic = hasAny(normalized, ["klinik", "dokter", "pasien", "rekam medis", "medical", "clinic"])
   const looksLikeSchool = hasAny(normalized, ["sekolah", "kampus", "siswa", "guru", "kelas", "course", "kursus", "e-learning", "elearning"])
@@ -91,6 +107,8 @@ function buildLocalPromptDraft(prompt: string): PromptDraft {
   const productType =
     looksLikeWorkspace
       ? "developer workspace"
+      : looksLikeTrading
+        ? "financial trading dashboard"
       : looksLikeDashboard
       ? "dashboard web app"
       : looksLikeAuth
@@ -123,6 +141,9 @@ function buildLocalPromptDraft(prompt: string): PromptDraft {
     looksLikeWorkspace ? "Preview" : "",
     looksLikeWorkspace ? "Terminal" : "",
     looksLikeWorkspace ? "History" : "",
+    looksLikeTrading ? "Trading dashboard" : "",
+    looksLikeTrading ? "Market watchlist" : "",
+    looksLikeTrading ? "Portfolio and positions page" : "",
     looksLikeAuth ? "Login page" : "",
     looksLikeDashboard ? "Dashboard page" : "",
     looksLikeStore ? "Product listing page" : "",
@@ -141,6 +162,9 @@ function buildLocalPromptDraft(prompt: string): PromptDraft {
     looksLikeWorkspace ? "Patch-first iteration and clear file state" : "",
     looksLikeWorkspace ? "Keyboard-first command bar and quick actions" : "",
     looksLikeWorkspace ? "Share link and version history hooks" : "",
+    looksLikeTrading ? "Live-style FX/crypto watchlist, price cards, and market movement summary" : "",
+    looksLikeTrading ? "Candlestick/chart placeholder, order ticket, open positions, and risk summary" : "",
+    looksLikeTrading ? "Trading activity feed, wallet balance, and market news widgets" : "",
     looksLikeDashboard ? "Data cards, tables, and activity sections" : "",
     looksLikeStore ? "Product cards and call-to-action sections" : "",
     looksLikePortfolio ? "Project gallery, service highlights, and contact conversion flow" : "",
@@ -160,6 +184,9 @@ function buildLocalPromptDraft(prompt: string): PromptDraft {
     looksLikeWorkspace ? "/api/projects/[id]/share" : "",
     looksLikeWorkspace ? "/api/projects/[id]/history" : "",
     looksLikeWorkspace ? "/api/projects/[id]/files" : "",
+    looksLikeTrading ? "/api/markets" : "",
+    looksLikeTrading ? "/api/positions" : "",
+    looksLikeTrading ? "/api/orders" : "",
     looksLikeAuth ? "/api/auth/login" : "",
     looksLikeDashboard ? "/api/dashboard/summary" : "",
     looksLikeStore ? "/api/products" : "",
@@ -178,6 +205,9 @@ function buildLocalPromptDraft(prompt: string): PromptDraft {
     looksLikeWorkspace ? "RunSession" : "",
     looksLikeWorkspace ? "ShareLink" : "",
     looksLikeWorkspace ? "GenerationHistory" : "",
+    looksLikeTrading ? "MarketPair" : "",
+    looksLikeTrading ? "TradeOrder" : "",
+    looksLikeTrading ? "Position" : "",
     looksLikeDashboard ? "DashboardMetric" : "",
     looksLikeStore ? "Product" : "",
     looksLikePortfolio ? "ProjectShowcase" : "",
@@ -191,7 +221,7 @@ function buildLocalPromptDraft(prompt: string): PromptDraft {
   ])
 
   const uiStyle = dedupeItems([
-    looksLikeWorkspace ? "IDE-like split panes and dense hierarchy" : "Modern and production-ready",
+    looksLikeWorkspace ? "IDE-like split panes and dense hierarchy" : looksLikeTrading ? "Dense financial terminal with clear risk hierarchy" : "Modern and production-ready",
     looksLikeWorkspace ? "Fast feedback loop with visible status and logs" : "Responsive spacing and clear hierarchy",
     looksLikeWorkspace ? "Opinionated, tasteful default layout" : "Conversion-focused hierarchy with strong CTA placement",
   ])
@@ -207,6 +237,8 @@ function buildLocalPromptDraft(prompt: string): PromptDraft {
   const microTasks = dedupeItems([
     looksLikeWorkspace
       ? "Build the smallest stable workspace shell first: layout, file explorer, editor, and preview container."
+      : looksLikeTrading
+        ? "Build the trading dashboard first: watchlist, chart area, order ticket, positions, and risk summary."
       : looksLikeDashboard
         ? "Build the main dashboard shell first: navigation, header, and one high-value KPI section."
         : looksLikeAuth
@@ -295,6 +327,8 @@ function buildFilePriority(draft: PromptDraft) {
   const isWorkspace = draft.pages.some((page) => ["Explorer", "Editor", "Preview", "Terminal", "History"].includes(page)) ||
     draft.features.some((feature) => /file explorer|preview|terminal|version history/i.test(feature))
   const isDashboard = draft.pages.some((page) => page === "Dashboard page")
+  const isTrading = draft.pages.some((page) => /trading|market|position/i.test(page)) ||
+    draft.features.some((feature) => /watchlist|order ticket|position|market|candlestick|trading/i.test(feature))
   const isCommerce = draft.features.some((feature) => /purchase|product cards|checkout|store/i.test(feature))
   const isPortfolio = draft.features.some((feature) => /project gallery|contact conversion|personal brand/i.test(feature))
   const isBooking = draft.features.some((feature) => /reservation|booking|availability/i.test(feature))
@@ -313,6 +347,19 @@ function buildFilePriority(draft: PromptDraft) {
       "app/api/health/route.ts",
       "lib/services/project.service.ts",
       "prisma/schema.prisma",
+    ]
+  }
+
+  if (isTrading) {
+    return [
+      "app/page.tsx",
+      "app/api/markets/route.ts",
+      "app/api/orders/route.ts",
+      "app/api/positions/route.ts",
+      "lib/services/trading.service.ts",
+      "prisma/schema.prisma",
+      "app/layout.tsx",
+      "app/globals.css",
     ]
   }
 

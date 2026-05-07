@@ -344,7 +344,10 @@ export class ProviderRouter {
       throw new Error("Swift AI Vision provider is not configured")
     }
 
-    const upstreamModelName = modelName === DEEPSEEK_MODEL_KEY ? env.deepseekDefaultModel : modelName
+    const upstreamModelName =
+      modelName === DEEPSEEK_MODEL_KEY || modelName === SWIFT_AI_MODEL_KEY
+        ? env.deepseekDefaultModel
+        : modelName
     let lastError: Error | null = null
 
     for (let attempt = 0; attempt < env.aiMaxRetries; attempt += 1) {

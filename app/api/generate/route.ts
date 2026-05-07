@@ -143,6 +143,7 @@ function appendProjectStructureContextToPrompt(
   prompt: string,
   input: {
     prompt: string
+    projectName: string
     files: GeneratedFile[]
     activeFile?: GeneratedFile | null
     promptLanguage: PromptLanguage
@@ -162,6 +163,7 @@ function appendProjectStructureContextToPrompt(
 
 function buildProjectStructureContext(input: {
   prompt: string
+  projectName: string
   files: GeneratedFile[]
   activeFile?: GeneratedFile | null
   promptLanguage: PromptLanguage
@@ -188,7 +190,7 @@ function buildProjectStructureContext(input: {
     "You are the Swift AI Full-Stack Engine. Your goal is to modify an existing web project based on user requests with surgical precision.",
     "",
     "### CONTEXT",
-    "- Project Name: Swift AI Builder",
+    `- Project Name: ${input.projectName}`,
     "- Current Project Files:",
     fileTree || "[no files available]",
     "",
@@ -782,6 +784,7 @@ function buildPromptExecutionContext(input: {
   const promptWithProjectStructure = shouldIncludeAIContext
     ? appendProjectStructureContextToPrompt(input.promptWithAttachments, {
         prompt: input.prompt,
+        projectName: input.project.name,
         files: existingFiles,
         activeFile: activeFileForContext,
         promptLanguage: input.promptLanguage,
@@ -1043,11 +1046,16 @@ export async function POST(request: NextRequest) {
         })
       }
 
+      const promptMode = inferPromptMode(prompt)
+
       promptEnhancement = await enhancePromptWithAgentRouter({
-        prompt: promptWithPreviewContext,
+        prompt: promptWithAttachments,
         modelName: modelConfig.modelName,
       })
-      const projectMemoryJson = mergeProjectMemoryJson(project.memoryJson || null, promptEnhancement.projectMemory)
+      const projectMemoryJson = mergeProjectMemoryJson(
+        promptMode === "rebuild" ? null : project.memoryJson || null,
+        promptEnhancement.projectMemory
+      )
 
       const basePrompt = promptEnhancement.prompt
       const effectivePrompt =
@@ -1153,7 +1161,6 @@ export async function POST(request: NextRequest) {
 
       let generatedFiles: GeneratedFile[] = []
       let providerAssemblyMessage = ""
-      const promptMode = inferPromptMode(prompt)
       const providerUpdatedEntry = hasPrimaryEntryUpdate(providerParsed.files)
       const shouldRebaseFromScaffold =
         existingFiles.length > 0 &&
@@ -1162,10 +1169,17 @@ export async function POST(request: NextRequest) {
 
       if (providerParsed.files.length > 0) {
         if (existingFiles.length > 0) {
-          const mergeBase = shouldRebaseFromScaffold ? scaffold.files : existingFiles
+          const mergeBase =
+            promptMode === "rebuild"
+              ? shouldRebaseFromScaffold
+                ? scaffold.files
+                : []
+              : existingFiles
           generatedFiles = mergeGeneratedFiles(mergeBase, providerParsed.files)
           providerAssemblyMessage = shouldRebaseFromScaffold
             ? `Provider menghasilkan ${providerParsed.files.length} file valid (${providerParsed.parseMode}). Karena prompt terdeteksi sebagai rebuild namun update halaman utama minim, sistem melakukan rebase dari scaffold terbaru lalu menerapkan output provider menjadi ${generatedFiles.length} file.`
+            : promptMode === "rebuild"
+              ? `Provider menghasilkan ${providerParsed.files.length} file valid (${providerParsed.parseMode}). Karena prompt terdeteksi sebagai rebuild, sistem mengganti arah project lama dan menerapkan output provider menjadi ${generatedFiles.length} file.`
             : `Provider menghasilkan ${providerParsed.files.length} file valid (${providerParsed.parseMode}) dan sistem menggabungkannya ke project existing (${existingFiles.length} file) menjadi ${generatedFiles.length} file.`
         } else {
           generatedFiles = providerParsed.files
@@ -1205,7 +1219,7 @@ export async function POST(request: NextRequest) {
       }
 
       const relevanceReport = evaluateOutputRelevance(prompt, generatedFiles)
-      if (shouldFailRelevanceGate(relevanceReport, providerParsed.files.length, existingFiles.length)) {
+      if (shouldFailRelevanceGate(relevanceReport, providerParsed.files.length, promptMode === "rebuild" ? 0 : existingFiles.length)) {
         throw new RelevanceValidationError(relevanceReport)
       }
 
@@ -1841,6 +1855,7 @@ function enforceFullStackRequirement(prompt: string) {
     "Core role: You are the core builder engine for this AI website platform.",
     "Convert short prompts into complete, premium, deployable web apps. Infer missing details with best-practice defaults.",
     "Auto-detect product intent and apply matching defaults: dashboard = SaaS admin dashboard, ecommerce = online store with cart + checkout, landing page = marketing page, portfolio = personal brand site, booking = reservation system, crm = internal business tool.",
+    "For trading, forex, crypto, saham, mata uang, exchange, or currency prompts: generate a financial trading dashboard with watchlist, price cards, chart/candlestick area, order ticket, open positions, portfolio balance, risk summary, and market/news widgets. Do not replace it with a generic content page, marketplace, or app-builder workspace.",
     "Hard requirement: Generate FULL-STACK Next.js app output, not frontend-only.",
     "Always include meaningful frontend UI + backend API route(s) + data model/service layer when applicable.",
     "Default stack: Next.js + TypeScript + Tailwind + shadcn/ui (unless user explicitly asks otherwise).",

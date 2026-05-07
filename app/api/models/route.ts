@@ -15,6 +15,7 @@ export async function GET() {
 
   const availableModels = models.filter((model) => {
     if (model.key === SWIFT_AI_MODEL_KEY && model.provider === "openai" && Boolean(env.openAiApiKey)) return true
+    if (model.key === SWIFT_AI_MODEL_KEY && model.provider === "deepseek" && Boolean(env.deepseekApiKey)) return true
     if (model.key === DEEPSEEK_MODEL_KEY && model.provider === "deepseek" && Boolean(env.deepseekApiKey)) return true
     return false
   }).sort((left, right) => {
