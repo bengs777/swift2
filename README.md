@@ -73,3 +73,4 @@ the production database contains the Prisma tables, especially `User`,
 - `GOOGLE_AUTH_SETUP.md` contains the step-by-step production auth checklist.
 - AI generation is locked to OpenRouter at `https://openrouter.ai/api/v1` using model `deepseek/deepseek-v4-flash`.
 # swift2
+# SWIFT2
