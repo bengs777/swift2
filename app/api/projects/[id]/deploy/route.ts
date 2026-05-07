@@ -32,6 +32,12 @@ type FileLike = {
   language?: string | null
 }
 
+type ImportBinding = {
+  imported: string
+  local: string
+  isDefault?: boolean
+}
+
 const normalizeFiles = (raw: unknown, fallback: FileLike[]) => {
   const source = Array.isArray(raw) ? raw : fallback
 
@@ -52,6 +58,436 @@ const normalizeFiles = (raw: unknown, fallback: FileLike[]) => {
   }
 
   return files.slice(0, MAX_FILE_COUNT)
+}
+
+const normalizeDeployPath = (path: string) => path.replace(/\\/g, "/").replace(/^\.\//, "").trim()
+
+function ensureDeploymentFiles(files: GeneratedFile[], projectName: string) {
+  const byPath = new Map<string, GeneratedFile>()
+
+  const addFile = (path: string, content: string, language: GeneratedFile["language"] = "ts") => {
+    const normalized = normalizeDeployPath(path)
+    if (!normalized || byPath.has(normalized)) {
+      return
+    }
+
+    byPath.set(normalized, { path: normalized, content, language })
+  }
+
+  for (const file of files) {
+    const normalized = normalizeDeployPath(file.path)
+    if (!normalized || /\.preview\.(tsx?|jsx?)$/i.test(normalized)) {
+      continue
+    }
+
+    byPath.set(normalized, {
+      ...file,
+      path: normalized,
+      content: String(file.content || ""),
+    })
+  }
+
+  const safeName = projectName.replace(/[^a-zA-Z0-9 _-]/g, "").trim() || "Swift Project"
+
+  addFile("package.json", buildDeployPackageJson(safeName), "json")
+  addFile("next.config.js", `/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactCompiler: false,
+}
+
+module.exports = nextConfig
+`, "ts")
+  addFile("tsconfig.json", buildDeployTsConfig(), "json")
+  addFile("postcss.config.mjs", `const config = {
+  plugins: {
+    "@tailwindcss/postcss": {},
+  },
+}
+
+export default config
+`, "ts")
+  addFile("app/globals.css", buildDeployGlobalsCss(), "css")
+  addFile("public/favicon.ico", "", "ts")
+
+  const missingImports = collectMissingLocalImports(Array.from(byPath.values()), byPath)
+  for (const missing of missingImports) {
+    addFile(missing.path, buildStubModule(missing.path, missing.bindings), inferLanguageFromPath(missing.path))
+  }
+
+  return Array.from(byPath.values()).sort((left, right) => left.path.localeCompare(right.path))
+}
+
+function buildDeployPackageJson(projectName: string) {
+  return JSON.stringify(
+    {
+      name: slugify(projectName),
+      version: "0.1.0",
+      private: true,
+      scripts: {
+        build: "next build",
+        start: "next start",
+      },
+      dependencies: {
+        "@tailwindcss/postcss": "^4.2.0",
+        "autoprefixer": "^10.4.20",
+        "class-variance-authority": "^0.7.1",
+        "clsx": "^2.1.1",
+        "lucide-react": "^0.564.0",
+        "next": "^16.2.4",
+        "react": "^19.2.5",
+        "react-dom": "^19.2.5",
+        "tailwind-merge": "^3.3.1",
+        "tailwindcss": "^4.2.0",
+      },
+      devDependencies: {
+        "@types/node": "^22",
+        "@types/react": "19.2.14",
+        "@types/react-dom": "19.2.3",
+        "typescript": "5.7.3",
+      },
+    },
+    null,
+    2
+  )
+}
+
+function buildDeployTsConfig() {
+  return JSON.stringify(
+    {
+      compilerOptions: {
+        target: "ES2017",
+        lib: ["dom", "dom.iterable", "esnext"],
+        allowJs: true,
+        skipLibCheck: true,
+        strict: false,
+        noEmit: true,
+        esModuleInterop: true,
+        module: "esnext",
+        moduleResolution: "bundler",
+        resolveJsonModule: true,
+        isolatedModules: true,
+        jsx: "react-jsx",
+        incremental: true,
+        paths: {
+          "@/*": ["./*"],
+        },
+      },
+      include: ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+      exclude: ["node_modules"],
+    },
+    null,
+    2
+  )
+}
+
+function buildDeployGlobalsCss() {
+  return `@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+`
+}
+
+function collectMissingLocalImports(files: GeneratedFile[], byPath: Map<string, GeneratedFile>) {
+  const missing = new Map<string, ImportBinding[]>()
+
+  for (const file of files) {
+    if (!/\.(tsx?|jsx?)$/i.test(file.path)) {
+      continue
+    }
+
+    for (const found of extractLocalImports(file.content)) {
+      const resolved = resolveImportPath(file.path, found.source)
+      if (!resolved || byPath.has(resolved)) {
+        continue
+      }
+
+      const existing = missing.get(resolved) || []
+      for (const binding of found.bindings) {
+        if (!existing.some((entry) => entry.local === binding.local && entry.imported === binding.imported)) {
+          existing.push(binding)
+        }
+      }
+      missing.set(resolved, existing)
+    }
+  }
+
+  return Array.from(missing.entries()).map(([path, bindings]) => ({ path, bindings }))
+}
+
+function extractLocalImports(content: string) {
+  const imports: Array<{ source: string; bindings: ImportBinding[] }> = []
+  const re = /^\s*import\s+([\s\S]*?)\s+from\s+['"]([^'"]+)['"]\s*;?/gm
+  let match: RegExpExecArray | null
+
+  while ((match = re.exec(content))) {
+    const clause = String(match[1] || "").trim()
+    const source = String(match[2] || "").trim()
+    if (!source.startsWith("@/") && !source.startsWith("./") && !source.startsWith("../")) {
+      continue
+    }
+
+    const bindings = parseImportBindings(clause)
+    if (bindings.length > 0) {
+      imports.push({ source, bindings })
+    }
+  }
+
+  return imports
+}
+
+function parseImportBindings(clause: string): ImportBinding[] {
+  const bindings: ImportBinding[] = []
+  const trimmed = clause.replace(/^type\s+/, "").trim()
+  if (!trimmed || trimmed.startsWith("*")) {
+    return bindings
+  }
+
+  const mixedMatch = trimmed.match(/^([A-Za-z_$][\w$]*)\s*,\s*\{([\s\S]+)\}$/)
+  if (mixedMatch?.[1]) {
+    bindings.push({ imported: "default", local: mixedMatch[1], isDefault: true })
+    bindings.push(...parseNamedImportList(mixedMatch[2]))
+    return bindings
+  }
+
+  const namedMatch = trimmed.match(/^\{([\s\S]+)\}$/)
+  if (namedMatch?.[1]) {
+    return parseNamedImportList(namedMatch[1])
+  }
+
+  const defaultMatch = trimmed.match(/^([A-Za-z_$][\w$]*)$/)
+  if (defaultMatch?.[1]) {
+    bindings.push({ imported: "default", local: defaultMatch[1], isDefault: true })
+  }
+
+  return bindings
+}
+
+function parseNamedImportList(value: string): ImportBinding[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((item) => !item.startsWith("type "))
+    .map((item) => {
+      const aliasMatch = item.match(/^([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)$/)
+      const imported = aliasMatch?.[1] || item
+      const local = aliasMatch?.[2] || imported
+      return { imported, local }
+    })
+}
+
+function resolveImportPath(fromPath: string, source: string) {
+  const base = source.startsWith("@/")
+    ? source.slice(2)
+    : source.startsWith(".")
+      ? joinRelativePath(fromPath, source)
+      : ""
+
+  if (!base) {
+    return ""
+  }
+
+  const normalized = normalizeDeployPath(base)
+  if (/\.(tsx?|jsx?|json|css)$/i.test(normalized)) {
+    return normalized
+  }
+
+  return `${normalized}.tsx`
+}
+
+function joinRelativePath(fromPath: string, source: string) {
+  const stack = normalizeDeployPath(fromPath).split("/")
+  stack.pop()
+
+  for (const segment of source.split("/")) {
+    if (!segment || segment === ".") continue
+    if (segment === "..") {
+      stack.pop()
+      continue
+    }
+    stack.push(segment)
+  }
+
+  return stack.join("/")
+}
+
+function buildStubModule(path: string, bindings: ImportBinding[]) {
+  if (/lib\/context\/cart-context\.tsx$/i.test(path)) {
+    return `"use client"
+
+import type { ReactNode } from "react"
+
+export function CartProvider({ children }: { children: ReactNode }) {
+  return <>{children}</>
+}
+
+export function useCart() {
+  return {
+    items: [],
+    addItem: () => {},
+    removeItem: () => {},
+    clearCart: () => {},
+    total: 0,
+  }
+}
+`
+  }
+
+  if (/components\/ui\/toaster\.tsx$/i.test(path)) {
+    return `export function Toaster() {
+  return null
+}
+`
+  }
+
+  const componentNames = bindings
+    .map((binding) => binding.local)
+    .filter((name) => /^[A-Z][A-Za-z0-9_$]*$/.test(name))
+  const uniqueNames = Array.from(new Set(componentNames.length > 0 ? componentNames : ["GeneratedSection"]))
+
+  return uniqueNames
+    .map((name) => buildStubComponent(name, path))
+    .join("\n\n")
+}
+
+function buildStubComponent(name: string, path: string) {
+  if (/navbar|header/i.test(name)) {
+    return `export function ${name}() {
+  return (
+    <header className="sticky top-0 z-20 border-b bg-white/95 px-6 py-4 shadow-sm">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
+        <a className="text-xl font-black text-emerald-600" href="/">JBB</a>
+        <input className="hidden flex-1 rounded-md border px-4 py-2 text-sm md:block" placeholder="Cari produk, brand, dan toko" />
+        <nav className="flex items-center gap-4 text-sm font-semibold">
+          <a href="/products">Produk</a>
+          <a href="/cart">Keranjang</a>
+        </nav>
+      </div>
+    </header>
+  )
+}`
+  }
+
+  if (/hero/i.test(name)) {
+    return `export function ${name}() {
+  return (
+    <section className="bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500 px-6 py-16 text-white">
+      <div className="mx-auto grid max-w-6xl gap-8 md:grid-cols-[1.15fr_.85fr]">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-wide">Marketplace JBB</p>
+          <h1 className="mt-3 text-4xl font-black md:text-5xl">Belanja cepat, harga bijak, semua dari JBB</h1>
+          <p className="mt-4 max-w-xl text-white/90">Temukan produk pilihan, promo harian, kategori populer, dan pengalaman belanja modern.</p>
+          <a className="mt-6 inline-flex rounded-md bg-white px-5 py-3 text-sm font-bold text-emerald-700" href="/products">Mulai belanja</a>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {["Flash Sale", "Gratis Ongkir", "Official Store", "Voucher"].map((item) => (
+            <div key={item} className="rounded-lg bg-white/15 p-5 shadow-lg backdrop-blur">
+              <div className="text-2xl font-black">{item}</div>
+              <p className="mt-2 text-sm text-white/85">Promo aktif hari ini</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}`
+  }
+
+  if (/categor/i.test(name)) {
+    return `export function ${name}() {
+  return (
+    <section className="mx-auto max-w-6xl px-6 py-10">
+      <h2 className="text-2xl font-bold">Kategori Populer</h2>
+      <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-6">
+        {["Fashion", "Elektronik", "Rumah", "Kecantikan", "Hobi", "Voucher"].map((item) => (
+          <div key={item} className="rounded-lg border bg-white p-4 text-center shadow-sm">
+            <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-emerald-100" />
+            <p className="text-sm font-semibold">{item}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}`
+  }
+
+  if (/product|grid|featured/i.test(name)) {
+    return `export function ${name}() {
+  const products = ["Sepatu Olahraga Premium", "Tas Ransel Anti Air", "Headset Gaming", "Kemeja Casual"]
+  return (
+    <section className="mx-auto max-w-6xl px-6 py-10">
+      <h2 className="text-2xl font-bold">Produk Pilihan</h2>
+      <div className="mt-5 grid grid-cols-2 gap-4 md:grid-cols-4">
+        {products.map((item, index) => (
+          <article key={item} className="overflow-hidden rounded-lg border bg-white shadow-sm">
+            <div className="aspect-square bg-gradient-to-br from-slate-100 to-emerald-100" />
+            <div className="space-y-2 p-3">
+              <h3 className="line-clamp-2 text-sm font-semibold">{item}</h3>
+              <p className="font-bold text-emerald-600">Rp {[250000, 180000, 320000, 150000][index].toLocaleString("id-ID")}</p>
+              <p className="text-xs text-slate-500">Terjual {[1200, 890, 650, 430][index].toLocaleString("id-ID")}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}`
+  }
+
+  if (/footer/i.test(name)) {
+    return `export function ${name}() {
+  return (
+    <footer className="mt-10 border-t bg-slate-950 px-6 py-8 text-white">
+      <div className="mx-auto flex max-w-6xl flex-col justify-between gap-4 md:flex-row">
+        <div>
+          <h2 className="text-xl font-black">JBB</h2>
+          <p className="mt-1 text-sm text-slate-300">Marketplace belanja bijak untuk semua.</p>
+        </div>
+        <p className="text-sm text-slate-400">Generated by Swift AI</p>
+      </div>
+    </footer>
+  )
+}`
+  }
+
+  return `export function ${name}({ children }: { children?: React.ReactNode }) {
+  return (
+    <section className="mx-auto max-w-6xl px-6 py-8">
+      <div className="rounded-lg border bg-white p-5 shadow-sm">
+        <h2 className="text-lg font-bold">${name}</h2>
+        <p className="mt-2 text-sm text-slate-600">Generated fallback for ${path}.</p>
+        {children}
+      </div>
+    </section>
+  )
+}`
+}
+
+function inferLanguageFromPath(path: string): GeneratedFile["language"] {
+  if (path.endsWith(".tsx")) return "tsx"
+  if (path.endsWith(".ts")) return "ts"
+  if (path.endsWith(".css")) return "css"
+  if (path.endsWith(".json")) return "json"
+  return "ts"
 }
 
 const slugify = (value: string) =>
@@ -129,13 +565,14 @@ export async function POST(
     }
 
     const body = await request.json().catch(() => ({}))
-    const files = normalizeFiles((body as { files?: unknown }).files, project.files)
-    if (files.length === 0) {
+    const rawFiles = normalizeFiles((body as { files?: unknown }).files, project.files)
+    if (rawFiles.length === 0) {
       return NextResponse.json(
         { error: "No generated files found to deploy." },
         { status: 400 }
       )
     }
+    const files = ensureDeploymentFiles(rawFiles, project.name)
 
     // Payload sizing guard & request logging
     const contentLengthHeader = request.headers.get("content-length")

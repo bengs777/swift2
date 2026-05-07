@@ -133,8 +133,7 @@ export const env = {
 if (env.nodeEnv === "production") {
   const missing: string[] = []
 
-  if (!env.databaseUrl) missing.push("DATABASE_URL")
-  if (!env.tursoDatabaseUrl) missing.push("TURSO_DATABASE_URL")
+  if (!env.databaseUrl && !env.tursoDatabaseUrl) missing.push("DATABASE_URL or TURSO_DATABASE_URL")
   if (!env.nextAuthSecret) missing.push("NEXTAUTH_SECRET")
   if (!env.googleClientId) missing.push("GOOGLE_CLIENT_ID")
   if (!env.googleClientSecret) missing.push("GOOGLE_CLIENT_SECRET")
