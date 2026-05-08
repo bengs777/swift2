@@ -77,3 +77,4 @@ the production database contains the Prisma tables, especially `User`,
 # swift-2
 # swift2
 # swift2
+# swift-ai
